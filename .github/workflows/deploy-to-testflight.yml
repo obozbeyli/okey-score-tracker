@@ -1,0 +1,51 @@
+name: Deploy to TestFlight
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: macos-latest
+
+    steps:
+  - uses: actions/checkout@v2
+  - name: Set up Xcode
+    uses: maxim-lobanov/setup-xcode@v1
+    with:
+      xcode-version: '15.4'  # Xcode sürümünüzü kontrol edin
+
+  - name: Install dependencies
+    run: pod install  # Eğer CocoaPods kullanıyorsanız, yoksa silin
+
+  - name: Build and archive
+    run: |
+      xcodebuild clean archive \
+        -scheme OkeyScoreTracker \  # Scheme adınızı değiştirin
+        -workspace OkeyScoreTracker.xcworkspace \  # Eğer workspace varsa
+        -configuration Release \
+        -archivePath ./build/OkeyScoreTracker.xcarchive \
+        -allowProvisioningUpdates \
+        -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }} \
+        -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
+        -authenticationKeyPath ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}  # Path'i secrets'a göre uyarlayın
+
+  - name: Export IPA
+    run: |
+      xcodebuild -exportArchive \
+        -archivePath ./build/OkeyScoreTracker.xcarchive \
+        -exportPath ./build \
+        -exportOptionsPlist ExportOptions.plist \
+        -allowProvisioningUpdates \
+        -authenticationKeyID ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }} \
+        -authenticationKeyIssuerID ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }} \
+        -authenticationKeyPath ${{ secrets.APP_STORE_CONNECT_PRIVATE_KEY }}
+
+  - name: Upload to TestFlight
+    run: |
+      xcrun altool --upload-app -f ./build/OkeyScoreTracker.ipa \  # IPA adınızı değiştirin
+        -t ios \
+        -u ${{ secrets.APPLE_ID }} \  # Apple ID'nizi secrets'a ekleyin
+        -p ${{ secrets.APPLE_PASSWORD }} \  # App-specific password oluşturun ve secrets'a ekleyin
+        --apiKey ${{ secrets.APP_STORE_CONNECT_API_KEY_ID }} \
+        --apiIssuer ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
