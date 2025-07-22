@@ -36,7 +36,7 @@
     <option value="ciftRenkliOkey">Çift + Renkli + Okey (16)</option>
   </select>
   <button id="updateScoreBtn" style="display:none;" onclick="updateScore()">Skoru Güncelle</button>
-  <button id="showHistoryBtn" style="display:none;" onclick="showHistory()">Oyun Geçmişi (Tablo)</button>
+  <button id="showHistoryBtn" style="display:none;" onclick="showHistory()">Oyun Geçmişi (Detaylı)</button>
   <button id="setupTeamsBtn" style="display:none;" onclick="setupTeams()">Takımları Ayarla</button>
   <div id="stats" class="stats" style="display:none;"></div>
   <table id="historyTable" class="history" style="display:none;">
@@ -53,8 +53,9 @@
     </thead>
     <tbody></tbody>
   </table>
+  <div id="detailedStats" style="display:none;"></div>
   <div id="teamSelectionPanel" class="setup-panel">
-    <h3>Oyuncu için Takım Seçin</h3>
+    <h3 id="playerNameForTeam"></h3>
     <button class="team-button" onclick="selectTeam('Takım 1')">Takım 1</button>
     <button class="team-button" onclick="selectTeam('Takım 2')">Takım 2</button>
   </div>
@@ -101,7 +102,15 @@
         const playerName = prompt(`Oyuncu ${playerNum} adı:`, `Oyuncu${playerNum}`) || `Oyuncu${playerNum}`;
         playerNames.push(playerName);
         if (mode === 'takim') {
-          showTeamSelection(playerName);
+          document.getElementById("playerNameForTeam").innerText = `${playerName} için Takım Seçin`;
+          document.getElementById("teamSelectionPanel").style.display = "block";
+          window.selectTeam = function(team) {
+            players[playerName] = team;
+            stats[playerName] = { normal: 0, renkli: 0, cift: 0, okey: 0, ciftRenkli: 0, renkliOkey: 0, ciftRenkliOkey: 0 };
+            document.getElementById("teamSelectionPanel").style.display = "none";
+            currentPlayerIndex++;
+            askPlayerName();
+          };
         } else {
           players[playerName] = "Şahsi";
           stats[playerName] = { normal: 0, renkli: 0, cift: 0, okey: 0, ciftRenkli: 0, renkliOkey: 0, ciftRenkliOkey: 0 };
@@ -113,18 +122,6 @@
         showGame();
         updateUI();
       }
-    }
-
-    function showTeamSelection(playerName) {
-      document.getElementById("teamSelectionPanel").style.display = "block";
-      // Butonlar zaten HTML'de var, onclick ile selectTeam çağrılıyor
-      window.selectTeam = function(team) {
-        players[playerName] = team;
-        stats[playerName] = { normal: 0, renkli: 0, cift: 0, okey: 0, ciftRenkli: 0, renkliOkey: 0, ciftRenkliOkey: 0 };
-        document.getElementById("teamSelectionPanel").style.display = "none";
-        currentPlayerIndex++;
-        askPlayerName();
-      };
     }
 
     function updatePlayerSelect() {
@@ -150,7 +147,68 @@
       document.getElementById("stats").style.display = "block";
     }
 
-    // Diğer fonksiyonlar (updateScore, updateUI, showHistory) aynı kaldı
+    function updateScore() {
+      const player = document.getElementById("player").value;
+      const bitis = document.getElementById("bitis").value;
+      const ceza = bitisTurleri[bitis];
+      if (mode === 'takim') {
+        const playerTeam = players[player];
+        const opponentTeam = playerTeam === "Takım 1" ? "Takım 2" : "Takım 1";
+        teams[opponentTeam].score -= ceza;
+      } else {
+        // Şahsi mod: Herkes kendine ceza alır (veya stratejiye göre uyarla)
+        // Burada basitçe genel puan düşümü yapabiliriz, ama takımlar olmadığı için genel puan düşümü olarak tuttum
+        teams["Takım 1"].score -= ceza; // Şahsi için genel puan düşümü, uyarlanabilir
+      }
+      stats[player][bitis]++;
+      history.push({
+        round: history.length + 1,
+        biten: player,
+        bitis: bitis,
+        ceza: ceza,
+        scores: { "Takım 1": teams["Takım 1"].score, "Takım 2": teams["Takım 2"].score },
+        time: new Date().toLocaleString("tr-TR")
+      });
+      updateUI();
+    }
+
+    function updateUI() {
+      document.getElementById("team1Score").innerText = `${teams["Takım 1"].name}: ${teams["Takım 1"].score}`;
+      document.getElementById("team2Score").innerText = `${teams["Takım 2"].name}: ${teams["Takım 2"].score}`;
+      let statsText = "";
+      for (const player in stats) {
+        statsText += `${player}: Normal: ${stats[player].normal}, Renkli: ${stats[player].renkli}, Çift: ${stats[player].cift}, Okey: ${stats[player].okey}, Çift+Renkli: ${stats[player].ciftRenkli}, Renkli+Okey: ${stats[player].renkliOkey}, Çift+Renkli+Okey: ${stats[player].ciftRenkliOkey}\n`;
+      }
+      document.getElementById("stats").innerText = statsText;
+      if (teams["Takım 1"].score <= 0 || teams["Takım 2"].score <= 0) {
+        alert(`Oyun Bitti! ${teams["Takım 1"].score <= 0 ? teams["Takım 2"].name : teams["Takım 1"].name} kazandı!`);
+      }
+    }
+
+    function showHistory() {
+      const tableBody = document.getElementById("historyTable").querySelector("tbody");
+      tableBody.innerHTML = "";
+      history.forEach(entry => {
+        const row = document.createElement("tr");
+        row.innerHTML = `
+          <td>${entry.round}</td>
+          <td>${entry.biten}</td>
+          <td>${entry.bitis}</td>
+          <td>${entry.ceza}</td>
+          <td>${entry.scores["Takım 1"]}</td>
+          <td>${entry.scores["Takım 2"]}</td>
+          <td>${entry.time}</td>
+        `;
+        tableBody.appendChild(row);
+      });
+      document.getElementById("historyTable").style.display = "table";
+      let detailedStatsText = "Detaylı Oyuncu İstatistikleri:\n";
+      for (const player in stats) {
+        detailedStatsText += `${player}: Normal: ${stats[player].normal}, Renkli: ${stats[player].renkli}, Çift: ${stats[player].cift}, Okey: ${stats[player].okey}, Çift+Renkli: ${stats[player].ciftRenkli}, Renkli+Okey: ${stats[player].renkliOkey}, Çift+Renkli+Okey: ${stats[player].ciftRenkliOkey}\n`;
+      }
+      document.getElementById("detailedStats").innerText = detailedStatsText;
+      document.getElementById("detailedStats").style.display = "block";
+    }
   </script>
 </body>
 </html>
